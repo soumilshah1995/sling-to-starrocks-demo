@@ -1,0 +1,66 @@
+
+
+------------------------------------
+Step 1:  Spin up all database in background
+docker compose up -d
+---------------------------------------------------------------
+Step 1:  Foreward necessary Port for the project
+ssh -R 9030:localhost:9030 \
+    -R 8030:localhost:8030 \
+    -R 8040:localhost:8040 \
+    -R 5432:localhost:5432 \
+    abc.serveo.net
+
+----------------------------------------------------------------
+EXEC into StarRocks Container
+
+Step 3:  Exec into container
+mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
+
+CREATE DATABASE `mydatabase`;
+ADMIN SET FRONTEND CONFIG ('default_replication_num' ="1");
+---------------------------------------------------------------
+
+export POSTGRES='postgresql://postgres:postgres@abc.serveo.net:5432/postgres?sslmode=disable'
+export STARROCKS='starrocks://root:@abc.serveo.net:9030/mydatabase'
+
+sling conns test POSTGRES
+sling conns test STARROCKS
+
+# =======================================================
+File System To Database (Postgres)
+# ======================================================
+sling run \
+    --src-stream file:///Users/soumilshah/IdeaProjects/SparkProject/Sling/orders \
+    --src-options '{"format": "csv", "options": {"delimiter": ",", "header": true}}' \
+    --tgt-conn POSTGRES \
+    --tgt-object public.orders  \
+    --debug \
+    --mode full-refresh
+
+# =======================================================
+Postgres Database to StarRocks
+# ======================================================
+sling run \
+    --src-conn POSTGRES \
+    --src-stream "SELECT order_id, name, order_value, priority, order_date FROM orders " \
+    --tgt-conn STARROCKS \
+    --tgt-object public.orders  \
+    --primary-key order_id \
+    --mode full-refresh \
+    --debug
+
+# =======================================================
+File System To StarRocks
+# ======================================================
+
+sling run \
+    --src-stream file:///Users/soumilshah/IdeaProjects/SparkProject/Sling/orders \
+    --src-options '{"format": "csv", "options": {"delimiter": ",", "header": true}}' \
+    --tgt-conn STARROCKS \
+    --tgt-object public.orders  \
+    --primary-key order_id \
+    --mode full-refresh \
+    --debug
+
+
